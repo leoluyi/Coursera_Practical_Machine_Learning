@@ -1,0 +1,306 @@
+---
+title: "Practical Machine Learning - Week 3"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(magrittr)
+library(data.table)
+library(caret)
+library(ggplot2)
+library(rpart.plot)
+library(MLmetrics)
+```
+
+## Tree Models
+
+### Dataset
+
+```{r}
+data("iris")
+table(iris$Species)
+iris %>% setDT
+```
+
+
+```{r}
+idx_train <- createDataPartition(iris$Species, p = 0.7, list = FALSE)
+training <- iris[idx_train,]; dim(train)
+testing <- iris[-idx_train,]; dim(test)
+```
+
+Plot the data by labels (species)
+
+```{r}
+ggplot(iris, aes(Petal.Length, Sepal.Width, color = Species)) +
+  geom_point() +
+  labs(title = "iris dataset")
+```
+
+### Model
+
+```{r}
+fit <- train(Species ~ ., method = "rpart", data = training)
+rpart.plot(fit$finalModel, extra=104,
+           branch.lty=3, shadow.col="gray", nn=TRUE)
+
+# Evaluation on testing
+y_pred <- predict(fit, type = "prob", newdata=testing)
+table(testing$Species, y_pred)
+# MLmetrics::MultiLogLoss(y_pred = y_pred, y_true = testing$Species)
+```
+
+
+## Bagging (Bootstrap aggregating)
+
+**Method:**
+
+1. Resample cases and recalculate predictions
+2. Average or majority vote
+
+**Notes:**
+
+- Similar bias
+- Reduce variance
+- Most useful for non-linear functions
+
+### Dataset
+
+```{r}
+library(ElemStatLearn)
+library(data.table)
+library(caret)
+library(ggplot2)
+
+data(ozone)
+setDT(ozone)
+ozone <- ozone[order(ozone),]
+head(ozone)
+```
+
+### Bagged LOESS
+
+by hand
+
+```{r}
+sample_idx <- caret::createResample(ozone$temperature, times = 10)
+
+loess_ozone <- function(ozone, idx) {
+  d <- ozone[idx,]; d[order(ozone)]
+  loess0 <- loess(temperature ~ ozone, data = d, span = 0.2)
+  out <- predict(loess0, data.table(ozone=1:155))
+  data.table(ozone = 1:155, temperature = out)
+}
+res_list <- lapply(sample_idx, loess_ozone, ozone = ozone)
+ll <- rbindlist(res_list, idcol = "group")
+
+g <- ggplot(NULL, aes(ozone, temperature)) +
+  geom_point(data = ozone, colour = "darkgrey")
+g + 
+  geom_line(aes(group = group), data = ll, colour = "grey") +
+  geom_line(
+  data = ll[, .(temperature=mean(temperature, na.rm = F)), ozone], 
+  colour = "red"
+)
+```
+
+by `caret` package
+
+```{r}
+tree_bag <- caret::bag(x = ozone[, .(ozone)], y = ozone$temperature, 
+                       B = 10,
+                       bagControl = bagControl(
+                         fit = ctreeBag$fit,
+                         predict = ctreeBag$pred,
+                         aggregate = ctreeBag$aggregate
+                       ))
+new_data <- data.table(
+  ozone[, .(ozone)],
+  temperature = predict(tree_bag, newdata = ozone[, .(ozone)])
+)
+g + geom_point(data = new_data, colour = "blue")
+```
+
+
+## Random Forest
+
+An extension to bagging
+
+**Method:**
+
+1. Resample cases and recalculate predictions (Bootstapp ing)
+2. At each split, bootstrp variables (subset of variable to be used)
+3. Average or majority vote
+
+**Pros:**
+
+1. Accuracy
+
+**Cons:**
+
+1. Speed low
+2. Interpretability low
+3. Overfitting
+
+### Data
+ 
+```{r}
+library(ggplot2)
+library(caret)
+library(data.table)
+data(iris); setDT(iris)
+
+train_idx = createDataPartition(iris$Species, p = 0.7, list=FALSE)
+training <- iris[train_idx,]
+testing <- iris[-train_idx,]
+```
+
+### Random forest
+
+```{r}
+fit <- train(Species ~ ., data = training, 
+             method = "rf", prox = TRUE)
+print(fit)
+
+# Getting single tree
+getTree(fit$finalModel, k=2)
+
+# Class "centers"
+centers <- classCenter(x = training[, .(Petal.Width, Petal.Length)],
+            label = training[, Species],
+            prox = fit$finalModel$proximity)
+centers <- data.table(centers, Species = rownames(centers))
+ggplot(NULL, aes(Petal.Width, Petal.Length, color = Species)) +
+  geom_point(data = iris) +
+  geom_point(data = centers, shape = 4, color = "black", size = 4)
+```
+
+### Cross validation
+
+```{r}
+set.seed(647)
+myiris <- cbind(iris[1:4], matrix(runif(96 * nrow(iris)), nrow(iris), 96))
+result <- rfcv(myiris, iris$Species, cv.fold=3)
+with(result, plot(n.var, error.cv, log="x", type="o", lwd=2))
+```
+
+## Boosting
+
+**Basic idea:**
+
+1. Take a lot of (possibly) weak predictors
+2. **Weight** them and add them
+3. Get stronger predictor
+
+## Model Based Prediction
+
+Assumption to the distribution of the feature $x$ given the class $k$:
+
+$$f_k(x) = Pr(X= x|Y = k)$$
+
+- Linear Discriminant Analysis: assumes $f_k(x)$ is multivariate Gaussian with same covariances
+- Quadratic Discriminant Analysis: assumes $f_k(x)$ is multivariate Gaussian with different covariances
+- Naive Bayes: assumes independence between features
+
+
+---
+
+# Quiz
+
+## Problem 1
+
+```{r}
+library(AppliedPredictiveModeling)
+data(segmentationOriginal); setDT(segmentationOriginal)
+library(caret)
+library(data.table)
+library(rpart.plot)
+set.seed(125)
+
+# 1. Subset the data to a training set and testing set based on the Case variable in the data set.
+train_idx <- createDataPartition(segmentationOriginal$Case, p = 0.7, list=FALSE)
+training <- segmentationOriginal[Case == "Train"]
+testing <- segmentationOriginal[Case == "Test"]
+
+fit <- train(Class ~., data = training[, -c("Cell","Case")], method = "rpart")
+predictors(fit)
+rpart.plot(fit$finalModel)
+```
+
+```{r}
+newdata <- training[0]
+newdata <- rbind(newdata, data.table(
+  TotalIntench2 = c(23000, 50000, 57000, NA),
+  FiberWidthCh1 = c(10, 10, 8, 8),
+  PerimStatusCh1= c(2, NA, NA, 2),
+  VarIntenCh4 = c(NA, 100, 100, 100)
+), fill = TRUE)
+predict(fit$finalModel, newdata = newdata, type = "class", na.action = na.pass)
+```
+
+
+## Problem 3
+
+```{r}
+library(pgmm)
+data(olive)
+dim(olive)
+head(olive)
+olive <- olive[,-1]
+treeModel <- train(Area ~ ., data=olive, method="rpart2")
+treeModel
+newdata <- as.data.frame(t(colMeans(olive)))
+predict(treeModel, newdata) # 2.875
+```
+
+2.875. It is strange because Area should be a qualitative 
+variable - but tree is reporting the average value of Area as 
+a numeric variable in the leaf predicted for newdata
+
+## Problem 4
+
+```{r}
+library(ElemStatLearn)
+data(SAheart)
+set.seed(8484)
+train <- sample(1:dim(SAheart)[1],size=dim(SAheart)[1]/2,replace=F)
+trainSA <- SAheart[train,]
+testSA <- SAheart[-train,]
+set.seed(13234)
+logitModel <- train(chd ~ age + alcohol + obesity + tobacco + 
+                      typea + ldl, data=trainSA, method="glm", 
+                    family="binomial")
+logitModel
+missClass <- function(values,prediction){sum(((prediction > 0.5)*1) != values)/length(values)}
+predictTrain <- predict(logitModel, trainSA)
+predictTest <- predict(logitModel, testSA)
+# Training Set Misclassification rate
+missClass(trainSA$chd, predictTrain) # 0.2727273
+# Test Set Misclassification rate
+missClass(testSA$chd, predictTest) # 0.3116883
+```
+
+## Problem 5.
+
+```{r}
+library(ElemStatLearn)
+library(randomForest)
+data(vowel.train)
+data(vowel.test)
+head(vowel.train)
+head(vowel.test)
+dim(vowel.train) # 528  11
+dim(vowel.test) # 462  11
+vowel.train$y <- as.factor(vowel.train$y)
+vowel.test$y <- as.factor(vowel.test$y)
+set.seed(33833)
+modelRf <- randomForest(y ~ ., data = vowel.train, importance = FALSE)
+o <- order(varImp(modelRf), decreasing=T)
+rownames(varImp(modelRf))[o]
+# The order of the variables is:
+#  x.2, x.1, x.5, x.6, x.8, x.4, x.9, x.3, x.7,x.10
+```

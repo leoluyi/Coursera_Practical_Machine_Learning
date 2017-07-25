@@ -1,0 +1,42 @@
+---
+title: "Practical Machine Learning - Week 1"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(kernlab)
+library(dplyr)
+```
+
+## Prediction
+
+```{r}
+data(spam)
+# spam %>% View()
+
+# load data
+set.seed(333)
+# picking a small subset (10 values) from spam data set
+spam_train <- spam[sample(nrow(spam), size=10), ]
+# label spam = 2 and ham = 1
+spam_label <- (spam_train$type=="spam") * 1 + 1
+# plot the capitalAve values for the dataset with colors differentiated by spam/ham (2 vs 1)
+plot(smallSpam$capitalAve, col = spam_label)
+
+# first rule (over-fitting to capture all variation)
+rule1 <- function(x) {
+  prediction <- rep(NA,length(x))
+  prediction[x > 2.7] <- "spam"
+  prediction[x < 2.40] <- "nonspam"
+  prediction[(x >= 2.40 & x <= 2.45)] <- "spam"
+  prediction[(x > 2.45 & x <= 2.70)] <- "nonspam"
+  return(prediction)
+}
+# tabulate results of prediction algorithm 1 (in sample error -> no error in this case)
+table(rule1(spam_train$capitalAve), smallSpam$type)
+```
+

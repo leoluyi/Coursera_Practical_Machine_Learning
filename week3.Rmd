@@ -65,7 +65,7 @@ table(testing$Species, y_pred)
 **Notes:**
 
 - Similar bias
-- Reduce variance
+- Reduce variance: averaging different predictors
 - Most useful for non-linear functions
 
 ### Dataset
@@ -162,8 +162,10 @@ testing <- iris[-train_idx,]
 ### Random forest
 
 ```{r}
-fit <- train(Species ~ ., data = training, 
-             method = "rf", prox = TRUE)
+fit <- train(Species ~ ., 
+             data = training, 
+             method = "rf", 
+             prox = TRUE) # for showing proximity
 print(fit)
 
 # Getting single tree
@@ -211,6 +213,14 @@ $$f_k(x) = Pr(X= x|Y = k)$$
 
 # Quiz
 
+For this quiz we will be using several R packages. R package versions change over time, the right answers have been checked using the following versions of the packages.
+
+- AppliedPredictiveModeling: v1.1.6
+- caret: v6.0.47
+- ElemStatLearn: v2012.04-0
+- pgmm: v1.1
+- rpart: v4.1.8
+
 ## Problem 1
 
 ```{r}
@@ -223,13 +233,18 @@ set.seed(125)
 
 # 1. Subset the data to a training set and testing set based on the Case variable in the data set.
 train_idx <- createDataPartition(segmentationOriginal$Case, p = 0.7, list=FALSE)
+
+# 2. Set the seed to 125 and fit a CART model with the rpart method using all predictor variables and default caret settings.
 training <- segmentationOriginal[Case == "Train"]
 testing <- segmentationOriginal[Case == "Test"]
 
 fit <- train(Class ~., data = training[, -c("Cell","Case")], method = "rpart")
 predictors(fit)
+print(fit$finalModel)
 rpart.plot(fit$finalModel)
 ```
+
+In the final model what would be the final model prediction for cases with the following variable values:
 
 ```{r}
 newdata <- training[0]
@@ -239,7 +254,7 @@ newdata <- rbind(newdata, data.table(
   PerimStatusCh1= c(2, NA, NA, 2),
   VarIntenCh4 = c(NA, 100, 100, 100)
 ), fill = TRUE)
-predict(fit$finalModel, newdata = newdata, type = "class", na.action = na.pass)
+predict(fit$finalModel, newdata = newdata, type = "class")
 ```
 
 

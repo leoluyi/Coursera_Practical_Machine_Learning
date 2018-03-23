@@ -1,33 +1,72 @@
 ---
 title: "Practical Machine Learning - Week 1"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  comment = "#>"
+)
 ```
+
+## Components of a predictor
+
+1. Question
+2. Input data
+3. Features
+4. Algorithm
+5. Parameters
+6. Evaluation
+
+## Features
 
 ```{r}
 library(kernlab)
-library(dplyr)
+library(data.table)
+library(ggplot2)
 ```
 
-## Prediction
 
 ```{r}
-data(spam)
-# spam %>% View()
-
 # load data
-set.seed(333)
-# picking a small subset (10 values) from spam data set
-spam_train <- spam[sample(nrow(spam), size=10), ]
-# label spam = 2 and ham = 1
-spam_label <- (spam_train$type=="spam") * 1 + 1
-# plot the capitalAve values for the dataset with colors differentiated by spam/ham (2 vs 1)
-plot(smallSpam$capitalAve, col = spam_label)
+data(spam); setDT(spam)
+spam
 
-# first rule (over-fitting to capture all variation)
+set.seed(333)
+```
+
+
+```{r}
+ggplot(spam, aes(your, colour = type)) +
+  geom_density() +
+  scale_x_continuous(name = 'freq of "your"')
+```
+
+
+## Algorithm
+
+```{r}
+# picking a small subset (10 values) from spam data set
+rows <- sample(1:nrow(spam), size=10, replace = F)
+spam_small <- spam[rows, ]
+
+# label spam = 2 and ham = 1
+spam_label <- (spam_small$type=="spam") * 1 + 1
+
+# plot the capitalAve values for the dataset with colors differentiated by spam/ham (2 vs 1)
+ggplot(spam_small, 
+       aes(x = seq_along(capitalAve), y = capitalAve, colour = type)) +
+  geom_point()
+```
+
+first rule (over-fitting to capture all variation)
+
+```{r}
 rule1 <- function(x) {
   prediction <- rep(NA,length(x))
   prediction[x > 2.7] <- "spam"
@@ -36,7 +75,55 @@ rule1 <- function(x) {
   prediction[(x > 2.45 & x <= 2.70)] <- "nonspam"
   return(prediction)
 }
-# tabulate results of prediction algorithm 1 (in sample error -> no error in this case)
-table(rule1(spam_train$capitalAve), smallSpam$type)
 ```
+
+## Evaluation
+
+```{r}
+# tabulate results of prediction algorithm 1 (in sample error -> no error in this case)
+table(rule1(spam_small$capitalAve), spam_small$type)
+```
+
+---
+
+# Quiz 1
+
+### Problem 1.
+
+Which of the following are steps in building a machine learning algorithm?
+
+> Deciding on an algorithm, Creating features, Evaluating the prediction.
+
+### Problem 2.
+
+Suppose we build a prediction algorithm on a data set and it is 100% accurate on that data set. 
+Why might the algorithm not work well if we collect a new data set?
+
+> Our algorithm may be overfitting the training data, 
+> predicting both the signal and the noise.
+
+### Problem 3.
+
+> typical sizes for the training and the test sets:
+> 60% in the training set, 40% in the testing set.
+
+### Problem 4. 
+
+What are some common error rates for predicting binary variables (i.e. variables with two possible 
+values like yes/no, disease/normal, clicked/didn't click)?
+
+> Specificity, Sensitivity
+
+### Problem 5.
+
+Suppose that we have created a machine learning algorithm that predicts whether a link will be 
+clicked with 99% sensitivity and 99% specificity. The rate the link is clicked is 1/1000 of 
+visits to a website. If we predict the link will be clicked on a specific visit, 
+what is the probability it will actually be clicked?
+
+> - 100,000 visits => 100 clicks`
+> - 99% = sensitivity = TP/(TP+FN) = 99/(99+1) = 99/100
+> - 99% specificity =TN/(TN+FP) = 98901/(98901+999) = 98901/99900
+> - P(actually clicked|clicked) = TP/(TP+FP) = 99/(99+999) = 9%
+
 

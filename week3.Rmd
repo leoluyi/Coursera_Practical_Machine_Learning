@@ -1,19 +1,31 @@
 ---
 title: "Practical Machine Learning - Week 3"
-output: html_document
+output: 
+  html_document: 
+    highlight: pygments
+    theme: cosmo
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  comment = "#>"
+)
 ```
 
-```{r}
+```{r load package}
 library(magrittr)
 library(data.table)
 library(caret)
 library(ggplot2)
 library(rpart.plot)
 library(MLmetrics)
+library(ModelMetrics)
+library(InformationValue)
 ```
 
 ## Tree Models
@@ -29,8 +41,8 @@ iris %>% setDT
 
 ```{r}
 idx_train <- createDataPartition(iris$Species, p = 0.7, list = FALSE)
-training <- iris[idx_train,]; dim(train)
-testing <- iris[-idx_train,]; dim(test)
+training <- iris[idx_train,]; dim(training)
+testing <- iris[-idx_train,]; dim(testing)
 ```
 
 Plot the data by labels (species)
@@ -49,9 +61,11 @@ rpart.plot(fit$finalModel, extra=104,
            branch.lty=3, shadow.col="gray", nn=TRUE)
 
 # Evaluation on testing
-y_pred <- predict(fit, type = "prob", newdata=testing)
+y_pred <- predict(fit, newdata=testing)
+y_pred_score <- predict(fit, type = "prob", newdata=testing)
 table(testing$Species, y_pred)
-# MLmetrics::MultiLogLoss(y_pred = y_pred, y_true = testing$Species)
+# MLmetrics::MultiLogLoss(y_pred = y_pred_score, y_true = testing$Species)  # bug in pmax
+ModelMetrics::mlogLoss(testing$Species, y_pred_score)
 ```
 
 
@@ -95,13 +109,14 @@ loess_ozone <- function(ozone, idx) {
   out <- predict(loess0, data.table(ozone=1:155))
   data.table(ozone = 1:155, temperature = out)
 }
+
 res_list <- lapply(sample_idx, loess_ozone, ozone = ozone)
 ll <- rbindlist(res_list, idcol = "group")
 
 g <- ggplot(NULL, aes(ozone, temperature)) +
   geom_point(data = ozone, colour = "darkgrey")
-g + 
-  geom_line(aes(group = group), data = ll, colour = "grey") +
+
+g + geom_line(aes(group = group), data = ll, colour = "grey") +
   geom_line(
   data = ll[, .(temperature=mean(temperature, na.rm = F)), ozone], 
   colour = "red"
@@ -111,13 +126,17 @@ g +
 by `caret` package
 
 ```{r}
-tree_bag <- caret::bag(x = ozone[, .(ozone)], y = ozone$temperature, 
-                       B = 10,
-                       bagControl = bagControl(
-                         fit = ctreeBag$fit,
-                         predict = ctreeBag$pred,
-                         aggregate = ctreeBag$aggregate
-                       ))
+library(party)
+
+tree_bag <- caret::bag(
+  x = ozone[, .(ozone)], y = ozone$temperature, 
+  B = 10,
+  bagControl = bagControl(
+    fit = ctreeBag$fit,
+    predict = ctreeBag$pred,
+    aggregate = ctreeBag$aggregate)
+)
+
 new_data <- data.table(
   ozone[, .(ozone)],
   temperature = predict(tree_bag, newdata = ozone[, .(ozone)])
@@ -152,6 +171,8 @@ An extension to bagging
 library(ggplot2)
 library(caret)
 library(data.table)
+library(randomForest)
+
 data(iris); setDT(iris)
 
 train_idx = createDataPartition(iris$Species, p = 0.7, list=FALSE)
@@ -169,7 +190,7 @@ fit <- train(Species ~ .,
 print(fit)
 
 # Getting single tree
-getTree(fit$finalModel, k=2)
+randomForest::getTree(fit$finalModel, k=2)
 
 # Class "centers"
 centers <- classCenter(x = training[, .(Petal.Width, Petal.Length)],
@@ -280,19 +301,29 @@ a numeric variable in the leaf predicted for newdata
 
 ```{r}
 library(ElemStatLearn)
-data(SAheart)
+library(data.table)
+data(SAheart); setDT(SAheart)
+
+SAheart[, chd := as.factor(chd)]
+
 set.seed(8484)
-train <- sample(1:dim(SAheart)[1],size=dim(SAheart)[1]/2,replace=F)
+train <- sample(1:dim(SAheart)[1], size=dim(SAheart)[1]/2, replace=F)
 trainSA <- SAheart[train,]
 testSA <- SAheart[-train,]
+
 set.seed(13234)
-logitModel <- train(chd ~ age + alcohol + obesity + tobacco + 
-                      typea + ldl, data=trainSA, method="glm", 
-                    family="binomial")
-logitModel
-missClass <- function(values,prediction){sum(((prediction > 0.5)*1) != values)/length(values)}
+(logitModel <- train(
+  chd ~ age + alcohol + obesity + tobacco + 
+    typea + ldl, data=trainSA, method="glm", 
+  family="binomial"))
+
+missClass <- function(values,prediction) {
+  sum(((prediction > 0.5)*1) != values)/length(values)
+}
+
 predictTrain <- predict(logitModel, trainSA)
 predictTest <- predict(logitModel, testSA)
+
 # Training Set Misclassification rate
 missClass(trainSA$chd, predictTrain) # 0.2727273
 # Test Set Misclassification rate
@@ -308,12 +339,16 @@ data(vowel.train)
 data(vowel.test)
 head(vowel.train)
 head(vowel.test)
+
 dim(vowel.train) # 528  11
 dim(vowel.test) # 462  11
+
 vowel.train$y <- as.factor(vowel.train$y)
 vowel.test$y <- as.factor(vowel.test$y)
+
 set.seed(33833)
 modelRf <- randomForest(y ~ ., data = vowel.train, importance = FALSE)
+
 o <- order(varImp(modelRf), decreasing=T)
 rownames(varImp(modelRf))[o]
 # The order of the variables is:

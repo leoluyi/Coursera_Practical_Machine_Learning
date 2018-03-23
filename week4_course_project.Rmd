@@ -1,13 +1,19 @@
 ---
 title: "Week4 - Course Project"
-output: html_document
+output: 
+  html_document: 
+    highlight: pygments
+    theme: cosmo
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
   echo = TRUE,
   warning = FALSE,
-  message = FALSE
+  message = FALSE,
+  comment = "#>"
 )
 ```
 
@@ -49,8 +55,10 @@ Due to security concerns with the exchange of R code, your code will not be run 
 
 ---
 
-```{r}
-
+```{r load packages}
+library(data.table)
+library(caret)
+library(InformationValue)
 ```
 
 
